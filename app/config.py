@@ -19,3 +19,5 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 150))
 TOP_K = int(os.getenv("TOP_K", 4))
 MIN_RELEVANCE = float(os.getenv("MIN_RELEVANCE", 0.20))
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", 20))
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "local")   # "local" or "gemini"
+GEMINI_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "models/gemini-embedding-001")
