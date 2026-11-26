@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Document Q&A</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c1f24; --muted:#6b7280; --brand:#2563eb; --border:#e5e7eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111418; --card:#1b1f26; --text:#e8eaed; --muted:#9aa3af; --brand:#60a5fa; --border:#2b313a; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui,sans-serif; background:var(--bg); color:var(--text); }
+  .wrap { max-width:1000px; margin:0 auto; padding:20px; display:grid; grid-template-columns:260px 1fr; gap:16px; }
+  @media (max-width:760px) { .wrap { grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; }
+  h1 { font-size:20px; margin:0 0 12px; grid-column:1/-1; }
+  h2 { font-size:14px; margin:0 0 10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  button { background:var(--brand); color:#fff; border:0; border-radius:8px; padding:8px 14px; cursor:pointer; font:inherit; }
+  button:disabled { opacity:.5; cursor:default; }
+  .doc { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .doc small { color:var(--muted); } .doc a { color:#dc2626; cursor:pointer; margin-left:8px; }
+  #chat { height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; margin-bottom:12px; }
+  .msg { padding:10px 12px; border-radius:10px; max-width:90%; white-space:pre-wrap; }
+  .user { background:var(--brand); color:#fff; align-self:flex-end; }
+  .bot { background:var(--bg); border:1px solid var(--border); align-self:flex-start; }
+  details { margin-top:8px; font-size:12px; color:var(--muted); }
+  .row { display:flex; gap:8px; } input[type=text] { flex:1; padding:9px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font:inherit; }
+  #status { font-size:12px; color:var(--muted); margin-top:8px; min-height:16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Document Q&amp;A <span style="color:var(--muted);font-weight:400">· RAG with LangGraph</span></h1>
+  <div class="card">
+    <h2>Documents</h2>
+    <input type="file" id="file" accept="application/pdf" style="width:100%;margin-bottom:8px">
+    <button id="upBtn" onclick="upload()">Upload PDF</button>
+    <div id="status"></div>
+    <div id="docs" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <h2>Chat</h2>
+    <div id="chat"><div class="msg bot">Upload a PDF, then ask a question about it.</div></div>
+    <div class="row">
+      <input type="text" id="q" placeholder="Ask about your documents..." onkeydown="if(event.key==='Enter')send()">
+      <button id="sendBtn" onclick="send()">Ask</button>
+    </div>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function loadDocs() {
+  const docs = await (await fetch('/api/documents')).json();
+  $('docs').innerHTML = docs.length ? docs.map(d =>
+    `<div class="doc"><span>${esc(d.name)} <small>${d.chunks} chunks</small></span>
+     <a onclick="del('${encodeURIComponent(d.name)}')">delete</a></div>`).join('')
+    : '<small style="color:var(--muted)">No documents yet</small>';
+}
+async function upload() {
+  const f = $('file').files[0]; if (!f) return;
+  $('upBtn').disabled = true; $('status').textContent = 'Processing (parse, chunk, embed)...';
+  const fd = new FormData(); fd.append('file', f);
+  const r = await fetch('/api/upload', { method:'POST', body:fd });
+  const j = await r.json();
+  $('status').textContent = r.ok ? `Indexed ${j.chunks} chunks.` : (j.detail || 'Upload failed');
+  $('upBtn').disabled = false; loadDocs();
+}
+async function del(n) { await fetch('/api/documents/' + n, { method:'DELETE' }); loadDocs(); }
+function add(cls, html) {
+  const d = document.createElement('div'); d.className = 'msg ' + cls; d.innerHTML = html;
+  $('chat').appendChild(d); $('chat').scrollTop = 1e9; return d;
+}
+async function send() {
+  const q = $('q').value.trim(); if (!q) return;
+  $('q').value = ''; add('user', esc(q)); $('sendBtn').disabled = true;
+  const wait = add('bot', 'Thinking...');
+  try {
+    const r = await fetch('/api/ask', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({question:q}) });
+    const j = await r.json();
+    if (!r.ok) { wait.textContent = j.detail || 'Error'; }
+    else {
+      const src = j.sources.map(s => `<div>${esc(s.source)} · p.${s.page} · score ${s.score}<br><i>${esc(s.snippet)}...</i></div>`).join('<hr>');
+      wait.innerHTML = esc(j.answer) + (j.sources.length ? `<details><summary>${j.sources.length} sources</summary>${src}</details>` : '');
+    }
+  } catch (e) { wait.textContent = 'Network error'; }
+  $('sendBtn').disabled = false;
+}
+loadDocs();
+</script>
+</body>
+</html>
