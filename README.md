@@ -2,7 +2,7 @@
 
 Upload PDFs and ask questions in natural language. Answers are generated **only from your documents**, with **page-level citations**. If the answer isn't in the documents, the system says so instead of guessing.
 
-![Demo](docs/screenshot.png)
+##LiveDemo: https://rag-document-qa-jadl.onrender.com
 
 ## Architecture
 
